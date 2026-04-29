@@ -8,6 +8,8 @@ async function main() {
 
 
     let view = "Regular";
+    let animate = true;
+    let openingAnimation = null;
     //let view = "Regular";
 
     //
@@ -35,6 +37,14 @@ async function main() {
         if(event.key == "r")
         {
             view = "Regular";
+        }
+        if (event.key == "a")
+        {
+            if (!openingAnimation) {
+                return;
+            }
+            openingAnimation.enabled = true;
+            startOpeningAnimation(performance.now() * 0.001);
         }
     }
     window.addEventListener("keyup", keyUp);
@@ -91,6 +101,18 @@ async function main() {
         [1, 0, 7], [2, 0, 7], [3, 0, 7], [4, 0, 7], [5, 0, 7], [6, 0, 7], [7, 0, 7], [8, 0, 7],
         [1, 0, 8], [2, 0, 8], [3, 0, 8], [4, 0, 8], [5, 0, 8], [6, 0, 8], [7, 0, 8], [8, 0, 8]
     ];
+    const initialWhitePositions = white_matrix.map(position => [...position]);
+    const initialBlackPositions = black_matrix.map(position => [...position]);
+
+    // First six plies of the Italian Game: 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5
+    const openingMoves = [
+        { color: "white", from: { x: 5, z: 2 }, to: { x: 5, z: 4 } },
+        { color: "black", from: { x: 5, z: 7 }, to: { x: 5, z: 5 } },
+        { color: "white", from: { x: 7, z: 1 }, to: { x: 6, z: 3 } },
+        { color: "black", from: { x: 2, z: 8 }, to: { x: 3, z: 6 } },
+        { color: "white", from: { x: 6, z: 1 }, to: { x: 3, z: 4 } },
+        { color: "black", from: { x: 6, z: 8 }, to: { x: 3, z: 5 } }
+    ];
 
     const BOARD_MIN = 1;
     const BOARD_MAX = 8;
@@ -101,6 +123,10 @@ async function main() {
 
     function clamp(value, min, max) {
         return Math.min(max, Math.max(min, value));
+    }
+
+    function lerp(start, end, t) {
+        return start + (end - start) * t;
     }
 
     function worldToBoard(worldX, worldZ) {
@@ -133,8 +159,130 @@ async function main() {
         black: createPieceState("black", black_matrix)
     };
 
+    openingAnimation = {
+        enabled: animate,
+        moveDuration: 0.65,
+        pauseDuration: 0.2,
+        nextMoveTime: 0,
+        moveIndex: 0,
+        activeMove: null,
+        finished: !animate
+    };
+
     function getPieceStateByColor(color) {
         return color === "white" ? pieceStateByColor.white : pieceStateByColor.black;
+    }
+
+    function resetBoardState() {
+        for (const piece of pieceStateByColor.white) {
+            const initial = initialWhitePositions[piece.index];
+            piece.position[0] = initial[0];
+            piece.position[1] = initial[1];
+            piece.position[2] = initial[2];
+            piece.hasMoved = false;
+            piece.captured = false;
+        }
+
+        for (const piece of pieceStateByColor.black) {
+            const initial = initialBlackPositions[piece.index];
+            piece.position[0] = initial[0];
+            piece.position[1] = initial[1];
+            piece.position[2] = initial[2];
+            piece.hasMoved = false;
+            piece.captured = false;
+        }
+    }
+
+    function getPieceAtSquare(color, x, z) {
+        return getPieceStateByColor(color).find(piece =>
+            !piece.captured &&
+            Math.round(piece.position[0]) === x &&
+            Math.round(piece.position[2]) === z
+        ) ?? null;
+    }
+
+    function isOpeningAnimationRunning() {
+        return openingAnimation.enabled && !openingAnimation.finished;
+    }
+
+    function startOpeningAnimation(currentTime = 0) {
+        resetBoardState();
+        dragState = null;
+        openingAnimation.moveIndex = 0;
+        openingAnimation.activeMove = null;
+        openingAnimation.nextMoveTime = currentTime;
+        openingAnimation.finished = openingMoves.length === 0;
+    }
+
+    function startNextOpeningMove(currentTime) {
+        const move = openingMoves[openingAnimation.moveIndex];
+        if (!move) {
+            openingAnimation.finished = true;
+            return;
+        }
+
+        const movingPiece = getPieceAtSquare(move.color, move.from.x, move.from.z);
+        if (!movingPiece) {
+            console.warn("Opening animation stopped: missing piece at", move.from);
+            openingAnimation.finished = true;
+            return;
+        }
+
+        const board = buildBoardMap(pieceStateByColor, movingPiece);
+        if (!isLegalMove(movingPiece, move.from, move.to, board)) {
+            console.warn("Opening animation stopped: illegal move", move);
+            openingAnimation.finished = true;
+            return;
+        }
+
+        openingAnimation.activeMove = {
+            piece: movingPiece,
+            from: { ...move.from },
+            to: { ...move.to },
+            target: board.get(key(move.to.x, move.to.z)) ?? null,
+            startTime: currentTime,
+            endTime: currentTime + openingAnimation.moveDuration
+        };
+    }
+
+    function updateOpeningAnimation(currentTime) {
+        if (!isOpeningAnimationRunning()) {
+            return;
+        }
+
+        const activeMove = openingAnimation.activeMove;
+        if (activeMove) {
+            const duration = Math.max(activeMove.endTime - activeMove.startTime, 1e-5);
+            const t = clamp((currentTime - activeMove.startTime) / duration, 0, 1);
+
+            activeMove.piece.position[0] = lerp(activeMove.from.x, activeMove.to.x, t);
+            activeMove.piece.position[2] = lerp(activeMove.from.z, activeMove.to.z, t);
+
+            if (t >= 1) {
+                activeMove.piece.position[0] = activeMove.to.x;
+                activeMove.piece.position[2] = activeMove.to.z;
+                activeMove.piece.hasMoved = true;
+
+                if (activeMove.target && activeMove.target.color !== activeMove.piece.color) {
+                    activeMove.target.captured = true;
+                    activeMove.target.position[0] = 0;
+                    activeMove.target.position[2] = 0;
+                }
+
+                openingAnimation.activeMove = null;
+                openingAnimation.moveIndex += 1;
+                openingAnimation.nextMoveTime = currentTime + openingAnimation.pauseDuration;
+
+                if (openingAnimation.moveIndex >= openingMoves.length) {
+                    openingAnimation.finished = true;
+                }
+            }
+            return;
+        }
+
+        if (currentTime >= openingAnimation.nextMoveTime) {
+            startNextOpeningMove(currentTime);
+        }
     }
 
     function getBoardHit(clientX, clientY) {
@@ -327,12 +475,18 @@ async function main() {
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     }
     reportWindowSize();
+    if (openingAnimation.enabled) {
+        startOpeningAnimation(0);
+    }
 
 
 
 
     canvas.addEventListener("mousedown", event => {
         if (event.button !== 0) {
+            return;
+        }
+        if (isOpeningAnimationRunning()) {
             return;
         }
 
@@ -350,6 +504,9 @@ async function main() {
     });
 
     window.addEventListener("mousemove", event => {
+        if (isOpeningAnimationRunning()) {
+            return;
+        }
         if (!dragState) {
             return;
         }
@@ -357,6 +514,10 @@ async function main() {
     });
 
     window.addEventListener("mouseup", event => {
+        if (isOpeningAnimationRunning()) {
+            dragState = null;
+            return;
+        }
         if (event.button !== 0 || !dragState) return;
 
         const piece = dragState.selectedPiece;
@@ -435,6 +596,12 @@ async function main() {
             {
                 currentViewProjectionMatrix = setObservationView(gl, shaderProgram, eye, at, up, canvas.clientWidth / canvas.clientHeight, DT);
 
+            }
+
+
+            if(animate)
+            {
+                updateOpeningAnimation(currentTime);
             }
 
 
