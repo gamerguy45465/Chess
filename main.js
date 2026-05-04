@@ -148,7 +148,8 @@ async function main() {
         { color: "white", from: { x: 7, z: 1 }, to: { x: 6, z: 3 } },
         { color: "black", from: { x: 2, z: 8 }, to: { x: 3, z: 6 } },
         { color: "white", from: { x: 6, z: 1 }, to: { x: 3, z: 4 } },
-        { color: "black", from: { x: 6, z: 8 }, to: { x: 3, z: 5 } }
+        { color: "black", from: { x: 6, z: 8 }, to: { x: 3, z: 5 } },
+        { color: "white", from: { x: 2, z: 2 }, to: { x: 2, z: 3 } },
     ];
 
     const BOARD_MIN = 1;
