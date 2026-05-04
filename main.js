@@ -1,6 +1,30 @@
 import { initShaderProgram } from "./shader.js";
 import { ChessSet } from "./chessSet.js";
 
+const SHOW_COORDINATE_AXES = true;
+
+const AXIS_VERTEX_SHADER_SOURCE = `
+precision mediump float;
+attribute vec3 aPosition;
+attribute vec3 aColor;
+uniform mat4 uViewProjectionMatrix;
+varying vec3 vColor;
+
+void main() {
+    vColor = aColor;
+    gl_Position = uViewProjectionMatrix * vec4(aPosition, 1.0);
+}
+`;
+
+const AXIS_FRAGMENT_SHADER_SOURCE = `
+precision mediump float;
+varying vec3 vColor;
+
+void main() {
+    gl_FragColor = vec4(vColor, 1.0);
+}
+`;
+
 main();
 async function main() {
     console.log('This is working');
@@ -10,6 +34,7 @@ async function main() {
     let view = "Regular";
     let animate = true;
     let openingAnimation = null;
+    let test_anim = false;
     //let view = "Regular";
 
     //
@@ -86,6 +111,18 @@ async function main() {
     //
     const chessSet = new ChessSet();
     await chessSet.init(gl);
+    let axisRenderer = null;
+    let axisLabelOverlay = null;
+    if (SHOW_COORDINATE_AXES) {
+        const axisSettings = {
+            axisLength: 6.0,
+            axisYOffset: 0.0
+        };
+        const axisShaderProgram = initShaderProgram(gl, AXIS_VERTEX_SHADER_SOURCE, AXIS_FRAGMENT_SHADER_SOURCE);
+        axisRenderer = createAxesRenderer(gl, axisShaderProgram, axisSettings);
+        axisLabelOverlay = createAxisLabelOverlay(canvas, axisSettings);
+        gl.useProgram(shaderProgram);
+    }
 
 
     //
@@ -93,13 +130,13 @@ async function main() {
     //
 
     const white_matrix = [
-        [1, 0, 2], [2, 0, 2], [3, 0, 2], [4, 0, 2], [5, 0, 2], [6, 0, 2], [7, 0, 2], [8, 0, 2],
-        [1, 0, 1], [2, 0, 1], [3, 0, 1], [4, 0, 1], [5, 0, 1], [6, 0, 1], [7, 0, 1], [8, 0, 1]
+        [1, 0, 2, 1, 1, 1, 0, 0, 0, 0], [2, 0, 2, 1, 1, 1, 0, 0, 0, 0], [3, 0, 2, 1, 1, 1, 0, 0, 0, 0], [4, 0, 2, 1, 1, 1, 0, 0, 0, 0], [5, 0, 2, 1, 1, 1, 0, 0, 0, 0], [6, 0, 2, 1, 1, 1, 0, 0, 0, 0], [7, 0, 2, 1, 1, 1, 0, 0, 0, 0], [8, 0, 2, 1, 1, 1, 0, 0, 0, 0],
+        [1, 0, 1, 1, 1, 1, 0, 0, 0, 0], [2, 0, 1, 1, 1, 1, 0, 0, 0, 0], [3, 0, 1, 1, 1, 1, 0, 0, 0, 0], [4, 0, 1, 1, 1, 1, 0, 0, 0, 0], [5, 0, 1, 1, 1, 1, 0, 0, 0, 0], [6, 0, 1, 1, 1, 1, 0, 0, 0, 0], [7, 0, 1, 1, 1, 1, 0, 0, 0, 0], [8, 0, 1, 1, 1, 1, 0, 0, 0, 0]
     ];
 
     const black_matrix = [
-        [1, 0, 7], [2, 0, 7], [3, 0, 7], [4, 0, 7], [5, 0, 7], [6, 0, 7], [7, 0, 7], [8, 0, 7],
-        [1, 0, 8], [2, 0, 8], [3, 0, 8], [4, 0, 8], [5, 0, 8], [6, 0, 8], [7, 0, 8], [8, 0, 8]
+        [1, 0, 7, 1, 1, 1, 0, 0, 0, 0], [2, 0, 7, 1, 1, 1, 0, 0, 0, 0], [3, 0, 7, 1, 1, 1, 0, 0, 0, 0], [4, 0, 7, 1, 1, 1, 0, 0, 0, 0], [5, 0, 7, 1, 1, 1, 0, 0, 0, 0], [6, 0, 7, 1, 1, 1, 0, 0, 0, 0], [7, 0, 7, 1, 1, 1, 0, 0, 0, 0], [8, 0, 7, 1, 1, 1, 0, 0, 0, 0],
+        [1, 0, 8, 1, 1, 1, 0, 0, 0, 0], [2, 0, 8, 1, 1, 1, 0, 0, 0, 0], [3, 0, 8, 1, 1, 1, 0, 0, 0, 0], [4, 0, 8, 1, 1, 1, 0, 0, 0, 0], [5, 0, 8, 1, 1, 1, 0, 0, 0, 0], [6, 0, 8, 1, 1, 1, 0, 0, 0, 0], [7, 0, 8, 1, 1, 1, 0, 0, 0, 0], [8, 0, 8, 1, 1, 1, 0, 0, 0, 0]
     ];
     const initialWhitePositions = white_matrix.map(position => [...position]);
     const initialBlackPositions = black_matrix.map(position => [...position]);
@@ -245,6 +282,7 @@ async function main() {
         };
     }
 
+    // Where the Animations are actually taking place
     function updateOpeningAnimation(currentTime) {
         if (!isOpeningAnimationRunning()) {
             return;
@@ -473,6 +511,9 @@ async function main() {
         gl.canvas.width = gl.canvas.clientWidth * physicalToCSSPixelsRatio;
         gl.canvas.height = gl.canvas.clientHeight * physicalToCSSPixelsRatio;
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        if (axisLabelOverlay) {
+            axisLabelOverlay.resize();
+        }
     }
     reportWindowSize();
     if (openingAnimation.enabled) {
@@ -553,7 +594,9 @@ async function main() {
     let init_anim = true;
     let previousTime = 0;
     let frameCounter = 0;
+    let the_time = 0;
     function redraw(currentTime) {
+        gl.useProgram(shaderProgram);
         currentTime *= .001; // milliseconds to seconds
         let DT = currentTime - previousTime;
         if (DT > .5)
@@ -561,6 +604,7 @@ async function main() {
         frameCounter += 1;
         if (Math.floor(currentTime) != Math.floor(previousTime)) {
             //console.log(frameCounter);
+            the_time += 1;
             frameCounter = 0;
         }
         previousTime = currentTime;
@@ -584,7 +628,7 @@ async function main() {
                 for(let i = 0; i < 500; i++)
                 {
                     eye[0] = i;
-                    console.log(eye);
+                    //console.log(eye);
                     currentViewProjectionMatrix = setObservationView(gl, shaderProgram, eye, at, up, canvas.clientWidth / canvas.clientHeight, DT);
                 }
                 eye[0] = 0;
@@ -599,10 +643,29 @@ async function main() {
             }
 
 
+
             if(animate)
             {
                 updateOpeningAnimation(currentTime);
             }
+            else
+            {
+                test_anim = true;
+            }
+
+
+            //if(test_anim)
+            //{
+            eye[0] = -20;
+            eye[1] = 5;
+            eye[2] = -7;
+            at[2] = 0;
+            at[1] = 0;
+            at[0] = 0;
+            currentViewProjectionMatrix = setObservationView(gl, shaderProgram, eye, at, up, canvas.clientWidth / canvas.clientHeight, DT);
+
+
+            //}
 
 
 
@@ -622,7 +685,26 @@ async function main() {
 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+
+        if(the_time >= 2 && the_time <= 4)
+        {
+            black_matrix[12][4] += 0.001;
+
+        }
+        if(the_time >= 5 && the_time <= 7)
+        {
+            white_matrix[12][6] = 90;
+            white_matrix[12][8] = 1;
+        }
+
         chessSet.draw(gl, shaderProgram, currentTime, white_matrix, black_matrix);
+        if (SHOW_COORDINATE_AXES && axisRenderer) {
+            axisRenderer.draw(currentViewProjectionMatrix);
+            if (axisLabelOverlay) {
+                axisLabelOverlay.draw(currentViewProjectionMatrix);
+            }
+            gl.useProgram(shaderProgram);
+        }
 
         requestAnimationFrame(redraw);
     }
@@ -662,4 +744,196 @@ function setObservationView(gl, shaderProgram, eye, at, up, canvasAspect, deltaT
     );
 
     return projectionMatrix;
+}
+
+function createAxesRenderer(gl, shaderProgram, options = {}) {
+    const axisLength = options.axisLength ?? 6.0;
+    const axisYOffset = options.axisYOffset ?? 0.0;
+    const arrowSize = options.arrowSize ?? 0.45;
+    const tickSize = options.tickSize ?? 0.12;
+    const labelSize = options.labelSize ?? 0.28;
+    const labelOffset = options.labelOffset ?? 0.55;
+    const wingSize = arrowSize * 0.45;
+
+    const vertices = [];
+    function addLine(start, end, color) {
+        vertices.push(start[0], start[1], start[2], color[0], color[1], color[2]);
+        vertices.push(end[0], end[1], end[2], color[0], color[1], color[2]);
+    }
+
+    const red = [0.95, 0.2, 0.2];
+    const green = [0.16, 0.85, 0.35];
+    const blue = [0.25, 0.45, 0.95];
+
+    // Axes through board center.
+    addLine([-axisLength, axisYOffset, 0], [axisLength, axisYOffset, 0], red);
+    addLine([0, axisYOffset - axisLength, 0], [0, axisYOffset + axisLength, 0], green);
+    addLine([0, axisYOffset, -axisLength], [0, axisYOffset, axisLength], blue);
+
+    // X-axis arrowheads (both directions).
+    addLine([axisLength, axisYOffset, 0], [axisLength - arrowSize, axisYOffset, wingSize], red);
+    addLine([axisLength, axisYOffset, 0], [axisLength - arrowSize, axisYOffset, -wingSize], red);
+    addLine([-axisLength, axisYOffset, 0], [-axisLength + arrowSize, axisYOffset, wingSize], red);
+    addLine([-axisLength, axisYOffset, 0], [-axisLength + arrowSize, axisYOffset, -wingSize], red);
+
+    // Y-axis arrowheads (both directions).
+    addLine([0, axisYOffset + axisLength, 0], [wingSize, axisYOffset + axisLength - arrowSize, 0], green);
+    addLine([0, axisYOffset + axisLength, 0], [-wingSize, axisYOffset + axisLength - arrowSize, 0], green);
+    addLine([0, axisYOffset - axisLength, 0], [wingSize, axisYOffset - axisLength + arrowSize, 0], green);
+    addLine([0, axisYOffset - axisLength, 0], [-wingSize, axisYOffset - axisLength + arrowSize, 0], green);
+
+    // Z-axis arrowheads (both directions).
+    addLine([0, axisYOffset, axisLength], [wingSize, axisYOffset, axisLength - arrowSize], blue);
+    addLine([0, axisYOffset, axisLength], [-wingSize, axisYOffset, axisLength - arrowSize], blue);
+    addLine([0, axisYOffset, -axisLength], [wingSize, axisYOffset, -axisLength + arrowSize], blue);
+    addLine([0, axisYOffset, -axisLength], [-wingSize, axisYOffset, -axisLength + arrowSize], blue);
+
+    // Integer tick marks.
+    for (let t = Math.ceil(-axisLength); t <= Math.floor(axisLength); t++) {
+        addLine([t, axisYOffset, -tickSize], [t, axisYOffset, tickSize], red);
+        addLine([-tickSize, axisYOffset + t, 0], [tickSize, axisYOffset + t, 0], green);
+        addLine([-tickSize, axisYOffset, t], [tickSize, axisYOffset, t], blue);
+    }
+
+    // Axis labels near positive directions.
+    const xCenter = axisLength + labelOffset;
+    const yForXZLabels = axisYOffset + 0.25;
+    addLine([xCenter - labelSize, yForXZLabels - labelSize, 0], [xCenter + labelSize, yForXZLabels + labelSize, 0], red);
+    addLine([xCenter - labelSize, yForXZLabels + labelSize, 0], [xCenter + labelSize, yForXZLabels - labelSize, 0], red);
+
+    const yCenter = axisYOffset + axisLength + labelOffset;
+    addLine([0, yCenter + labelSize * 2, 0], [0, yCenter + labelSize * 0.5, 0], green);
+    addLine([0, yCenter + labelSize * 0.5, 0], [-labelSize, yCenter + labelSize * 1.5, 0], green);
+    addLine([0, yCenter + labelSize * 0.5, 0], [labelSize, yCenter + labelSize * 1.5, 0], green);
+
+    const zCenter = axisLength + labelOffset;
+    addLine([-labelSize, yForXZLabels + labelSize, zCenter], [labelSize, yForXZLabels + labelSize, zCenter], blue);
+    addLine([labelSize, yForXZLabels + labelSize, zCenter], [-labelSize, yForXZLabels - labelSize, zCenter], blue);
+    addLine([-labelSize, yForXZLabels - labelSize, zCenter], [labelSize, yForXZLabels - labelSize, zCenter], blue);
+
+    const axisBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, axisBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+    const positionLocation = gl.getAttribLocation(shaderProgram, "aPosition");
+    const colorLocation = gl.getAttribLocation(shaderProgram, "aColor");
+    const viewProjectionLocation = gl.getUniformLocation(shaderProgram, "uViewProjectionMatrix");
+    const vertexCount = vertices.length / 6;
+    const stride = 6 * Float32Array.BYTES_PER_ELEMENT;
+
+    return {
+        draw(viewProjectionMatrix) {
+            if (!viewProjectionMatrix) {
+                return;
+            }
+
+            const depthTestEnabled = gl.isEnabled(gl.DEPTH_TEST);
+            gl.useProgram(shaderProgram);
+            gl.bindBuffer(gl.ARRAY_BUFFER, axisBuffer);
+            gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, stride, 0);
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(colorLocation, 3, gl.FLOAT, false, stride, 3 * Float32Array.BYTES_PER_ELEMENT);
+            gl.enableVertexAttribArray(colorLocation);
+            gl.uniformMatrix4fv(viewProjectionLocation, false, viewProjectionMatrix);
+
+            if (depthTestEnabled) {
+                gl.disable(gl.DEPTH_TEST);
+            }
+            gl.drawArrays(gl.LINES, 0, vertexCount);
+            if (depthTestEnabled) {
+                gl.enable(gl.DEPTH_TEST);
+            }
+        }
+    };
+}
+
+function createAxisLabelOverlay(targetCanvas, options = {}) {
+    const axisLength = options.axisLength ?? 6.0;
+    const axisYOffset = options.axisYOffset ?? 0.0;
+
+    const overlayCanvas = document.createElement("canvas");
+    overlayCanvas.style.position = "fixed";
+    overlayCanvas.style.pointerEvents = "none";
+    overlayCanvas.style.zIndex = "10";
+    overlayCanvas.style.left = "0px";
+    overlayCanvas.style.top = "0px";
+    document.body.appendChild(overlayCanvas);
+
+    const ctx = overlayCanvas.getContext("2d");
+
+    function resize() {
+        const rect = targetCanvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        overlayCanvas.width = Math.max(1, Math.round(rect.width * ratio));
+        overlayCanvas.height = Math.max(1, Math.round(rect.height * ratio));
+        overlayCanvas.style.width = `${rect.width}px`;
+        overlayCanvas.style.height = `${rect.height}px`;
+        overlayCanvas.style.left = `${rect.left}px`;
+        overlayCanvas.style.top = `${rect.top}px`;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function projectToScreen(world, viewProjectionMatrix, width, height) {
+        const clip = vec4.create();
+        vec4.transformMat4(clip, vec4.fromValues(world[0], world[1], world[2], 1), viewProjectionMatrix);
+        if (clip[3] <= 0.001) {
+            return null;
+        }
+
+        const ndcX = clip[0] / clip[3];
+        const ndcY = clip[1] / clip[3];
+        const ndcZ = clip[2] / clip[3];
+        if (ndcZ < -1 || ndcZ > 1) {
+            return null;
+        }
+
+        return {
+            x: (ndcX * 0.5 + 0.5) * width,
+            y: (-ndcY * 0.5 + 0.5) * height
+        };
+    }
+
+    function drawLabel(text, x, y, color) {
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.75)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(text, x, y);
+        ctx.fillStyle = color;
+        ctx.fillText(text, x, y);
+    }
+
+    function draw(viewProjectionMatrix) {
+        if (!viewProjectionMatrix) {
+            return;
+        }
+
+        const width = targetCanvas.clientWidth;
+        const height = targetCanvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const minTick = Math.ceil(-axisLength);
+        const maxTick = Math.floor(axisLength);
+
+        for (let tick = minTick; tick <= maxTick; tick++) {
+            const xPoint = projectToScreen([tick, axisYOffset, 0], viewProjectionMatrix, width, height);
+            if (xPoint) {
+                drawLabel(String(tick), xPoint.x, xPoint.y - 12, "rgb(242, 70, 70)");
+            }
+
+            const yPoint = projectToScreen([0, axisYOffset + tick, 0], viewProjectionMatrix, width, height);
+            if (yPoint) {
+                drawLabel(String(tick), yPoint.x + 14, yPoint.y, "rgb(60, 222, 98)");
+            }
+
+            const zPoint = projectToScreen([0, axisYOffset, tick], viewProjectionMatrix, width, height);
+            if (zPoint) {
+                drawLabel(String(tick), zPoint.x - 14, zPoint.y + 12, "rgb(70, 132, 255)");
+            }
+        }
+    }
+
+    resize();
+    return { resize, draw };
 }

@@ -37,7 +37,7 @@ class ChessSet {
         gl.drawArrays(gl.TRIANGLES, 0, this.buffers[itemName].vertexCount);
     }
 
-    drawAt(gl, shaderProgram, itemName, atx=0, aty=0, atz=0, sx=1, sy=1, sz=1, degrees=0, rx=0, ry=0, rz=0) {
+    drawAt(gl, shaderProgram, itemName, atx, aty, atz, sx, sy, sz, degrees, rx, ry, rz) {
         // make atz=1 map to tz=3.5 and atz=2 to tz=2.5
         const radians = degrees*Math.PI/180.0;
         this.drawItem(gl, shaderProgram, itemName, atx-4.5, aty, -atz+4.5, sx, sy, sz, radians, rx, ry, rz) ;
@@ -59,7 +59,7 @@ class ChessSet {
         for(let x = 0; x <= 7; x++)
         {
             const white = whiteMatrix[x];
-            this.drawAt(gl, shaderProgram, "pawn", white[0], white[1], white[2]);
+            this.drawAt(gl, shaderProgram, "pawn", white[0], white[1], white[2], white[3], white[4], white[5], white[6], white[7], white[8], white[9]);
 
         }
 
@@ -68,7 +68,7 @@ class ChessSet {
         for(let x = 8; x <= 15; x++)
         {
             const white = whiteMatrix[x];
-            this.drawAt(gl, shaderProgram, items[x], white[0], white[1], white[2]);
+            this.drawAt(gl, shaderProgram, items[x], white[0], white[1], white[2], white[3], white[4], white[5], white[6], white[7], white[8], white[9]);
         }
 
 
@@ -78,13 +78,13 @@ class ChessSet {
         // Draw the black pawns:
         for (let x=0; x<=7; x++){
             const black = blackMatrix[x];
-            this.drawAt(gl, shaderProgram, "pawn", black[0], black[1], black[2]);
+            this.drawAt(gl, shaderProgram, "pawn", black[0], black[1], black[2], black[3], black[4], black[5], black[6], black[7], black[8], black[9]);
         }
 
         for (let x = 8; x <= 15; x++)
         {
             const black = blackMatrix[x];
-            this.drawAt(gl, shaderProgram, items[x], black[0], black[1], black[2]);
+            this.drawAt(gl, shaderProgram, items[x], black[0], black[1], black[2], black[3], black[4], black[5], black[6], black[7], black[8], black[9]);
         }
     }
 }
